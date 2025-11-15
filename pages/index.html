@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agentes de IA - FIA</title>
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --chat-height: 70vh;
+            --chat-height-mobile: 60vh;
+            --message-max-width: 80%;
+            --message-max-width-mobile: 95%;
+            --primary-blue: #3b82f6;
+            --dark-blue: #1d4ed8;
+        }
+
+        .chat-container {
+            height: var(--chat-height);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .message-bubble {
+            max-width: var(--message-max-width);
+            word-wrap: break-word;
+        }
+
+        .user-message {
+            background: var(--primary-blue);
+            color: white;
+            margin-left: auto;
+        }
+
+        .bot-message {
+            background: #f3f4f6;
+            color: #374151;
+            margin-right: auto;
+        }
+
+        .typing-indicator { opacity: 0; transition: opacity 0.3s ease; }
+        .typing-indicator.show { opacity: 1; }
+
+        .agent-selector {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .panel-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+        
+        .panel-container.show { display: block; }
+
+        .rag-sources {
+            background: #f8fafc;
+            border-left: 4px solid var(--primary-blue);
+            padding: 12px;
+            margin-top: 10px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .confidence-bar {
+            height: 4px;
+            background: #e5e7eb;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ef4444, #f59e0b, #10b981);
+            transition: width 0.3s ease;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-online { background-color: #10b981; }
+        .status-offline { background-color: #ef4444; }
+        .status-checking { background-color: #f59e0b; animation: pulse 1s infinite; }
+
+        .diagram-type-card {
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .diagram-type-card:hover {
+            border-color: var(--primary-blue);
+            background: #eff6ff;
+        }
+
+        .diagram-type-card.selected {
+            border-color: var(--dark-blue);
+            background: #dbeafe;
+        }
+
+        .mermaid-diagram {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 10px 0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            overflow-x: auto;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @media (max-width: 768px) {
+            .chat-container { height: var(--chat-height-mobile); }
+            .message-bubble { max-width: var(--message-max-width-mobile); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-robot text-2xl text-blue-600"></i>
+                    <h1 class="text-xl font-bold text-gray-900">Agentes de IA - FIA</h1>
+                </div>
+                <div class="text-sm text-gray-600">
+                    <i class="fas fa-university mr-1"></i>
+                    FIA.LabData - Prof. Sergio Gaiotto
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-6xl mx-auto p-4">
+        <div class="mb-6">
+            <div class="bg-white rounded-lg shadow-sm p-4">
+                <h2 class="text-lg font-semibold mb-3 text-gray-800">
+                    <i class="fas fa-cogs mr-2"></i>Selecione o Agente
+                </h2>
+                <div id="agent-cards" class="grid md:grid-cols-2 lg:grid-cols-5 gap-4"></div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+            <div id="chat-messages" class="chat-container overflow-y-auto p-4"></div>
+            
+            <div class="border-t bg-white p-4">
+                <div class="flex gap-2">
+                    <input type="text" id="message-input" 
+                           class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="Digite sua mensagem...">
+                    <button onclick="sendMessage()" 
+                            class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
+                        <i class="fas fa-paper-plane mr-2"></i>Enviar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="knowledge-panel" class="panel-container"></div>
+        <div id="externo-panel" class="panel-container"></div>
+        <div id="mermaid-panel" class="panel-container"></div>
+    </div>
+
+    <script>
+        const CONFIG = {
+            ENDPOINTS: {
+                BASE: '',
+                MCP: '/mcp/chat',
+                RAG: '/rag/chat',
+                EXTERNO: '/externo/chat',
+                PROMPT: '/prompt/generate',
+                MERMAID: '/mermaid/generate',
+                MERMAID_TYPES: '/mermaid/diagram-types',
+                MERMAID_HISTORY: '/mermaid/history',
+                MERMAID_RESET: '/mermaid/reset',
+                RAG_KNOWLEDGE: '/rag/knowledge-base',
+                RAG_RESET: '/rag/reset-history',
+                EXTERNO_HISTORY: '/externo/chat-history',
+                EXTERNO_RESET: '/externo/reset-history'
+            },
+            AGENTS: [
+                {
+                    id: 'mcp',
+                    icon: 'fa-link',
+                    title: 'Agente MCP Firecrawl',
+                    description: 'Integração dinâmica com ferramentas externas via Model Context Protocol, neste caso Firecrawl',
+                    tags: ['Scraping Real-time', 'MCP Integration', 'Conversacional']
+                },
+                {
+                    id: 'rag',
+                    icon: 'fa-database',
+                    title: 'Agente RAG',
+                    description: 'Retrieval-Augmented Generation com base de conhecimento vetorial e busca semântica',
+                    tags: ['Vetorização', 'Busca Semântica', 'Contexto']
+                },
+                {
+                    id: 'externo',
+                    icon: 'fa-cloud',
+                    title: 'Agente Externo',
+                    description: 'Conexão com agente externo rodando localmente, integração com sistemas externos',
+                    tags: ['API Externa', 'Integração', 'Flexível']
+                },
+                {
+                    id: 'prompt',
+                    icon: 'fa-magic',
+                    title: 'Agente Prompt',
+                    description: 'Geração e otimização de prompts para diferentes casos de uso e modelos',
+                    tags: ['Otimização', 'Templates', 'Best Practices']
+                },
+                {
+                    id: 'mermaid',
+                    icon: 'fa-project-diagram',
+                    title: 'Agente Mermaid',
+                    description: 'Geração de diagramas e fluxogramas em formato Mermaid via IA',
+                    tags: ['Diagramas', 'Visualização', 'Automação']
+                }
+            ],
+            DIAGRAM_TYPES: {
+                'sequence': { name: 'Diagrama de Sequência', desc: 'Mostra interações entre entidades ao longo do tempo' },
+                'flowchart': { name: 'Fluxograma', desc: 'Representa fluxos de processo e decisões' },
+                'classDiagram': { name: 'Diagrama de Classes', desc: 'Mostra estruturas orientadas a objetos' },
+                'stateDiagram': { name: 'Diagrama de Estados', desc: 'Representa máquinas de estado e transições' },
+                'gantt': { name: 'Gráfico de Gantt', desc: 'Cronogramas e planejamento de projetos' },
+                'erDiagram': { name: 'Diagrama ER', desc: 'Modelos de dados e relacionamentos' },
+                'journey': { name: 'Jornada do Usuário', desc: 'Experiência do usuário passo a passo' }
+            }
+        };
+
+        let state = {
+            currentAgent: null,
+            selectedDiagramType: 'sequence',
+            chatHistory: {}
+        };
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', init);
+
+        function init() {
+            renderAgentCards();
+            setupEventListeners();
+            document.getElementById('message-input').focus();
+        }
+
+        function setupEventListeners() {
+            document.getElementById('message-input').addEventListener('keypress', e => {
+                if (e.key === 'Enter') sendMessage();
+            });
+        }
+
+        function renderAgentCards() {
+            const container = document.getElementById('agent-cards');
+            container.innerHTML = CONFIG.AGENTS.map(agent => `
+                <div class="agent-selector rounded-lg p-4 cursor-pointer transition-all hover:shadow-md" 
+                     onclick="selectAgent('${agent.id}')" id="${agent.id}-card">
+                    <div class="flex items-center mb-2">
+                        <i class="fas ${agent.icon} text-blue-600 mr-2"></i>
+                        <h3 class="font-semibold text-gray-800">${agent.title}</h3>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-3">${agent.description}</p>
+                    <div class="flex flex-wrap gap-1">
+                        ${agent.tags.map(tag => `<span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">${tag}</span>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function selectAgent(agentId) {
+            state.currentAgent = agentId;
+            
+            document.querySelectorAll('.agent-selector').forEach(card => {
+                card.classList.remove('border-2', 'border-blue-600', 'bg-blue-50');
+            });
+            
+            const selectedCard = document.getElementById(`${agentId}-card`);
+            if (selectedCard) {
+                selectedCard.classList.add('border-2', 'border-blue-600', 'bg-blue-50');
+            }
+            
+            clearMessages();
+            hideAllPanels();
+            
+            const agentInitializers = {
+                'rag': initRAGAgent,
+                'externo': initExternoAgent,
+                'mermaid': initMermaidAgent
+            };
+            
+            if (agentInitializers[agentId]) {
+                agentInitializers[agentId]();
+            }
+            
+            updateInputPlaceholder(agentId);
+        }
+
+        function updateInputPlaceholder(agentId) {
+            const placeholders = {
+                'mcp': 'Digite um site para fazer scraping...',
+                'rag': 'Faça uma pergunta sobre a base de conhecimento...',
+                'externo': 'Digite sua mensagem...',
+                'prompt': 'Descreva o prompt que você precisa...',
+                'mermaid': 'Descreva seu diagrama...'
+            };
+            document.getElementById('message-input').placeholder = placeholders[agentId] || 'Digite sua mensagem...';
+        }
+
+        function hideAllPanels() {
+            ['knowledge-panel', 'externo-panel', 'mermaid-panel'].forEach(id => {
+                document.getElementById(id).classList.remove('show');
+            });
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            
+            if (!message || !state.currentAgent) return;
+            
+            addMessage(message, 'user');
+            input.value = '';
+            showTypingIndicator();
+            
+            try {
+                const handlers = {
+                    'mcp': handleMCPAgent,
+                    'rag': handleRAGAgent,
+                    'externo': handleExternoAgent,
+                    'prompt': handlePromptAgent,
+                    'mermaid': handleMermaidAgent
+                };
+                
+                await handlers[state.currentAgent](message);
+            } catch (error) {
+                addMessage(`Erro: ${error.message}`, 'bot');
+            } finally {
+                hideTypingIndicator();
+            }
+        }
+
+        function addMessage(text, type, metadata = {}) {
+            const container = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message-bubble ${type}-message rounded-lg px-4 py-2 mb-3`;
+            
+            let content = `<div>${text}</div>`;
+            
+            if (metadata.sources) {
+                content += `
+                    <div class="rag-sources">
+                        <div class="font-semibold text-sm mb-2">📚 Fontes:</div>
+                        ${metadata.sources.map(source => `
+                            <div class="text-xs mb-1">
+                                <span class="font-medium">${source.name}</span>
+                                <div class="confidence-bar mt-1">
+                                    <div class="confidence-fill" style="width: ${source.confidence * 100}%"></div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            if (metadata.mermaidCode) {
+                content += `
+                    <div class="mermaid-diagram" id="mermaid-${metadata.timestamp}">
+                        <pre>${metadata.mermaidCode}</pre>
+                        <div class="mt-3 flex gap-2">
+                            <button onclick="copyMermaidCode(${metadata.timestamp})" 
+                                    class="bg-blue-600 text-white px-3 py-1 rounded text-xs">
+                                <i class="fas fa-copy mr-1"></i>Copiar
+                            </button>
+                            <button onclick="openMermaidLive(${metadata.timestamp})" 
+                                    class="bg-green-600 text-white px-3 py-1 rounded text-xs">
+                                <i class="fas fa-external-link-alt mr-1"></i>Abrir no Mermaid Live
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            messageDiv.innerHTML = content;
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            const indicator = document.createElement('div');
+            indicator.id = 'typing-indicator';
+            indicator.className = 'typing-indicator show message-bubble bot-message rounded-lg px-4 py-2 mb-3';
+            indicator.innerHTML = '<div class="flex space-x-2"><div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div><div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div><div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div></div>';
+            document.getElementById('chat-messages').appendChild(indicator);
+        }
+
+        function hideTypingIndicator() {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) indicator.remove();
+        }
+
+        function clearMessages() {
+            document.getElementById('chat-messages').innerHTML = '';
+        }
+
+        async function apiRequest(endpoint, data) {
+            const response = await fetch(CONFIG.ENDPOINTS.BASE + endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        }
+
+        async function handleMCPAgent(message) {
+            const data = await apiRequest(CONFIG.ENDPOINTS.MCP, { url: message });
+            addMessage(data.content || data.error || 'Sem resposta', 'bot');
+        }
+
+        async function handleRAGAgent(message) {
+            if (!state.chatHistory.rag) state.chatHistory.rag = [];
+            state.chatHistory.rag.push({ role: 'user', content: message });
+            
+            const data = await apiRequest(CONFIG.ENDPOINTS.RAG, {
+                message,
+                chat_history: state.chatHistory.rag
+            });
+            
+            if (data.answer) {
+                state.chatHistory.rag.push({ role: 'assistant', content: data.answer });
+                const metadata = data.sources ? { sources: data.sources } : {};
+                addMessage(data.answer, 'bot', metadata);
+            }
+        }
+
+        async function handleExternoAgent(message) {
+            const data = await apiRequest(CONFIG.ENDPOINTS.EXTERNO, { message });
+            addMessage(data.response || data.error || 'Sem resposta', 'bot');
+        }
+
+        async function handlePromptAgent(message) {
+            const data = await apiRequest(CONFIG.ENDPOINTS.PROMPT, {
+                description: message,
+                use_case: 'general'
+            });
+            addMessage(data.prompt || data.error || 'Sem resposta', 'bot');
+        }
+
+        async function handleMermaidAgent(message) {
+            const data = await apiRequest(CONFIG.ENDPOINTS.MERMAID, {
+                prompt: message,
+                diagram_type: state.selectedDiagramType
+            });
+            
+            const botMessage = data.explanation || 'Diagrama gerado com sucesso';
+            const metadata = data.mermaid_code ? {
+                mermaidCode: data.mermaid_code,
+                timestamp: Date.now()
+            } : {};
+            
+            addMessage(botMessage, 'bot', metadata);
+        }
+
+        function initRAGAgent() {
+            const panel = document.getElementById('knowledge-panel');
+            panel.innerHTML = `
+                <h3 class="font-semibold mb-3"><i class="fas fa-database mr-2"></i>Base de Conhecimento</h3>
+                <div id="knowledge-list"></div>
+                <button onclick="resetRAGHistory()" class="mt-3 bg-red-600 text-white px-4 py-2 rounded">
+                    <i class="fas fa-trash mr-2"></i>Limpar Histórico
+                </button>
+            `;
+            panel.classList.add('show');
+            loadKnowledgeBase();
+        }
+
+        function initExternoAgent() {
+            const panel = document.getElementById('externo-panel');
+            panel.innerHTML = `
+                <h3 class="font-semibold mb-3"><i class="fas fa-server mr-2"></i>Status do Agente Externo</h3>
+                <div id="externo-status"></div>
+                <button onclick="resetExternoHistory()" class="mt-3 bg-red-600 text-white px-4 py-2 rounded">
+                    <i class="fas fa-trash mr-2"></i>Limpar Histórico
+                </button>
+            `;
+            panel.classList.add('show');
+            checkExternoStatus();
+        }
+
+        function initMermaidAgent() {
+            const panel = document.getElementById('mermaid-panel');
+            panel.innerHTML = `
+                <h3 class="font-semibold mb-3"><i class="fas fa-project-diagram mr-2"></i>Configuração do Diagrama</h3>
+                <div id="diagram-type-selector" class="grid grid-cols-3 gap-2 mb-4"></div>
+                <div id="mermaid-history" class="mt-4"></div>
+                <button onclick="resetMermaidHistory()" class="mt-3 bg-red-600 text-white px-4 py-2 rounded">
+                    <i class="fas fa-trash mr-2"></i>Limpar Histórico
+                </button>
+            `;
+            panel.classList.add('show');
+            loadDiagramTypes();
+            loadMermaidHistory();
+        }
+
+        async function loadKnowledgeBase() {
+            try {
+                const data = await fetch(CONFIG.ENDPOINTS.RAG_KNOWLEDGE).then(r => r.json());
+                const list = document.getElementById('knowledge-list');
+                
+                if (data.knowledge_base?.length) {
+                    list.innerHTML = data.knowledge_base.map(item => `
+                        <div class="bg-gray-50 p-2 rounded mb-2">
+                            <div class="font-medium text-sm">${item.title}</div>
+                            <div class="text-xs text-gray-600">${item.content.substring(0, 100)}...</div>
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = '<div class="text-gray-500">Nenhum documento na base</div>';
+                }
+            } catch (error) {
+                document.getElementById('knowledge-list').innerHTML = '<div class="text-red-600">Erro ao carregar base</div>';
+            }
+        }
+
+        async function checkExternoStatus() {
+            const statusDiv = document.getElementById('externo-status');
+            statusDiv.innerHTML = '<span class="status-indicator status-checking"></span>Verificando...';
+            
+            try {
+                await fetch(CONFIG.ENDPOINTS.EXTERNO_HISTORY);
+                statusDiv.innerHTML = '<span class="status-indicator status-online"></span>Agente online e operacional';
+            } catch {
+                statusDiv.innerHTML = '<span class="status-indicator status-offline"></span>Agente offline ou inacessível';
+            }
+        }
+
+        async function loadDiagramTypes() {
+            try {
+                const data = await fetch(CONFIG.ENDPOINTS.MERMAID_TYPES).then(r => r.json());
+                const selector = document.getElementById('diagram-type-selector');
+                
+                if (data.supported_diagrams?.length) {
+                    selector.innerHTML = data.supported_diagrams.map(d => `
+                        <div class="diagram-type-card ${d.type === state.selectedDiagramType ? 'selected' : ''}" 
+                             onclick="selectDiagramType('${d.type}')">
+                            <div class="font-medium text-sm">${d.name}</div>
+                            <div class="text-xs text-gray-600 mt-1">${d.description}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Erro ao carregar tipos de diagrama:', error);
+            }
+        }
+
+        function selectDiagramType(type) {
+            state.selectedDiagramType = type;
+            document.querySelectorAll('.diagram-type-card').forEach(c => c.classList.remove('selected'));
+            event.target.closest('.diagram-type-card').classList.add('selected');
+        }
+
+        async function loadMermaidHistory() {
+            try {
+                const data = await fetch(CONFIG.ENDPOINTS.MERMAID_HISTORY).then(r => r.json());
+                const historyDiv = document.getElementById('mermaid-history');
+                
+                if (data.diagram_history?.length) {
+                    historyDiv.innerHTML = `
+                        <div class="font-medium mb-2">Últimos ${Math.min(data.diagram_history.length, 5)} diagramas:</div>
+                        ${data.diagram_history.slice(0, 5).map(item => `
+                            <div class="bg-gray-50 p-2 rounded mb-2">
+                                <div class="font-medium text-sm">${item.response.diagram_type}</div>
+                                <div class="text-xs text-gray-600">${item.request.prompt.substring(0, 50)}...</div>
+                            </div>
+                        `).join('')}
+                    `;
+                } else {
+                    historyDiv.innerHTML = '<div class="text-gray-500">Nenhum diagrama gerado</div>';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar histórico:', error);
+            }
+        }
+
+        async function resetRAGHistory() {
+            if (!confirm('Limpar histórico RAG?')) return;
+            await apiRequest(CONFIG.ENDPOINTS.RAG_RESET, {});
+            state.chatHistory.rag = [];
+            alert('Histórico limpo');
+        }
+
+        async function resetExternoHistory() {
+            if (!confirm('Limpar histórico externo?')) return;
+            await apiRequest(CONFIG.ENDPOINTS.EXTERNO_RESET, {});
+            alert('Histórico limpo');
+        }
+
+        async function resetMermaidHistory() {
+            if (!confirm('Limpar histórico de diagramas?')) return;
+            await apiRequest(CONFIG.ENDPOINTS.MERMAID_RESET, {});
+            loadMermaidHistory();
+            alert('Histórico limpo');
+        }
+
+        function copyMermaidCode(timestamp) {
+            const code = document.querySelector(`#mermaid-${timestamp} pre`).textContent;
+            navigator.clipboard.writeText(code)
+                .then(() => alert('Código copiado'))
+                .catch(() => alert('Erro ao copiar'));
+        }
+
+        function openMermaidLive(timestamp) {
+            const code = document.querySelector(`#mermaid-${timestamp} pre`).textContent;
+            const state = { code, mermaid: {}, panZoom: true };
+            const url = `https://mermaid.live/edit#${btoa(JSON.stringify(state))}`;
+            window.open(url, 'popup', 'width=800,height=600');
+        }
+    </script>
+</body>
+</html>

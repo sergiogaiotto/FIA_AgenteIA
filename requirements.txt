@@ -1,0 +1,53 @@
+# ============================================
+# Core Dependencies
+# ============================================
+python-dotenv
+pydantic
+pydantic-settings
+aiohttp
+
+# ============================================
+# FastAPI & Server
+# ============================================
+fastapi
+uvicorn[standard]
+jinja2
+
+# ============================================
+# LangChain Ecosystem - Latest Stable
+# ============================================
+langchain
+langchain-openai
+langchain-community
+langchain-text-splitters
+langgraph
+
+# ============================================
+# Vector Database
+# ============================================
+pinecone-client
+langchain-pinecone
+
+# ============================================
+# MCP Support
+# ============================================
+langchain-mcp-adapters
+
+# ============================================
+# Web Scraping
+# ============================================
+firecrawl-py
+
+# ============================================
+# LlamaIndex for Vision (ClassificaImagem)
+# ============================================
+llama-index
+llama-index-llms-openai
+llama-index-multi-modal-llms-openai
+
+# ============================================
+# Image Processing
+# ============================================
+pillow
+opencv-python-headless
+numpy

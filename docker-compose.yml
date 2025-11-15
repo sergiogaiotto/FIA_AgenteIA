@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - PORT=8000
+      - LOG_LEVEL=INFO
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+      - /app/__pycache__
+      - /app/.pytest_cache
+    command: uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - redis
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+    volumes:
+      - redis-data:/data
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  redis-data:
